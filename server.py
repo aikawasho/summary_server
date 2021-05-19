@@ -6,13 +6,13 @@ import time
 from BertSum.src.bert_summary import Bertsum_pred
 from tools.speech_t import speech_text
 import os
-
+import numpy as np
 # コマンドの定義
 SET = 0
 SUM = 1
 WAV = 2
 PLAY = 3
-
+INPUT = 4
 
 class StreamServer():
     def __init__(self, server_host, server_port):
@@ -73,19 +73,30 @@ class StreamServer():
         if r_cmd == WAV:
             wav_id = int(time.time())
             output_path =  self.cla_dir[client.getpeername()[0]] +str(wav_id)+ ".wav"
+            framerate = int.from_bytes(r_packet[2:6], 'big')
+            samplewidth = int.from_bytes(r_packet[6:8], 'big')
+            nchanneles = int.from_bytes(r_packet[8:10],'big')
             wf = wave.open(output_path, 'wb')
-            wf.setnchannels(self.CHANNELS)
-            wf.setsampwidth(self.RATE)
-            wf.setframerate(self.fs)
+            wf.setnchannels(nchanneles)
+            wf.setsampwidth(samplewidth)
+            wf.setframerate(framerate)
             wf.writeframes(r_packet[2:])
             wf.close()
-            text = speech_text(output_path)
-            if text:
-                text += "。"
+            text,type_ = speech_text(output_path)
+
             print('テキスト化')
             print(text)
-            pac = wav_id.to_bytes(4, 'big')
-            pac += text.encode()
+            pac = wav_id.to_bytes(5, 'big')
+            if type_:
+                pac += int(1).to_bytes(1,'big')
+            else:
+                pac += int(0).to_bytes(1,'big')
+                
+            text_b = text.encode()
+            text_length = len(text_b)
+
+            pac += text_length.to_bytes(2,'big')
+            pac += text_b
             client.sendall(pac)
             print('sending text complete')
             client.close()
@@ -95,19 +106,39 @@ class StreamServer():
             wav_id = int.from_bytes(r_packet[2:], byteorder = "big")
             input_path =  self.cla_dir[client.getpeername()[0]]  + str(wav_id)+ ".wav"
             print(input_path)
+            pac = bytes()
             waveFile = wave.open(input_path, 'r')
+                    # wavファイルの情報を取得
+            # チャネル数：monoなら1, stereoなら2, 5.1chなら6(たぶん)
+            nchanneles = waveFile.getnchannels()
+
+            # 音声データ1サンプルあたりのバイト数。2なら2bytes(16bit), 3なら24bitなど
+            samplewidth = waveFile.getsampwidth()
+
+            # サンプリング周波数。普通のCDなら44.1k
+            framerate = waveFile.getframerate()
+
+            # 音声のデータ点の数
+            nframes = waveFile.getnframes()
             data = waveFile.readframes(-1)
             waveFile.close()
+            pac += framerate.to_bytes(4,'big')
+            pac += samplewidth.to_bytes(2,'big')
+            pac += nchanneles.to_bytes(2,'big')
+            pac += data
             print('send wav')
-            client.sendall(data)
+            client.sendall(pac)
             client.close()
             
         # 要約の処理
         elif r_cmd == SUM:
             text = r_packet[2:].decode()
-            suma = Bertsum_pred(text)
+            print('summary from:',text)
+            suma = ''
+            if text:
+                suma = Bertsum_pred(text)
             print('summary complete')
-            suma = ''.join(suma)
+            suma = '\n'.join(suma)
             data = suma.encode()
             client.sendall(data)
             client.close()
@@ -118,6 +149,85 @@ class StreamServer():
             os.mkdir(dir_path)
             self.cla_dir[client.getpeername()[0]] = dir_path
             
+        #wavfile受け取りの処理    
+        elif r_cmd == INPUT:
+            wav_id = int(time.time())
+
+            framerate = int.from_bytes(r_packet[2:6], 'big')
+            samplewidth = int.from_bytes(r_packet[6:8], 'big')
+            nchanneles = int.from_bytes(r_packet[8:10],'big')
+            
+            if samplewidth == 2:
+                data = np.frombuffer(r_packet[10:], dtype='int16')
+            elif samplewidth == 4:
+                data = np.frombuffer(r_packet[10:], dtype='int32')
+                
+            if nchanneles == 2:
+                data = data[::nchanneles]
+            data =[data[idx:idx + framerate] for idx in range(0,len(data), framerate)]
+            save = 0
+            save_data = bytes()
+            pac = bytes()
+            stop_counter = 0
+            length = 0
+            file_id = 0
+            for d in data:
+                
+                # 閾値以上の場合はファイルに保存
+                if d.max()/ 32768.0 > 0.1:
+                    save = 1
+                    
+                if save == 1:
+                    save_data += d.tobytes()
+                    length += 1
+
+                if d.max()/ 32768.0 <= 0.1 and save == 1:
+                    stop_counter += 1
+                    #設定秒間閾値を下回ったら一旦終了
+                    if stop_counter >= 1:
+                                               
+                    #設定秒間以上だったら保存
+                        if length  > 2:
+                            Id = str(wav_id)+str(file_id)
+                            print(Id)
+                            file_path = self.cla_dir[client.getpeername()[0]] +Id+ ".wav"
+                            
+                            wf = wave.open(file_path, 'wb')
+                            wf.setnchannels(nchanneles)
+                            wf.setsampwidth(samplewidth)
+                            wf.setframerate(framerate)
+                            wf.writeframes(save_data)
+                            wf.close()
+                            print('save')
+                            print(file_path)
+                            
+                            text,type_ = speech_text(file_path)
+                            if text:
+                                text += "。"
+                            print('テキスト化')
+                            print(text)
+                            pac += int(Id).to_bytes(5, 'big')
+                            if type_:
+                                pac += int(1).to_bytes(1,'big')
+                            else:
+                                pac += int(0).to_bytes(1,'big')
+                            text_b = text.encode()
+                            text_length = len(text_b)
+                            
+                            pac += text_length.to_bytes(2,'big')
+                            pac += text_b
+       
+                            file_id += 1
+                            
+                        stop_counter = 0    
+                        length = 0
+                        save = 0
+                        save_data = bytes()
+                        
+            client.sendall(pac)
+            print('sending text complete')
+            print(len(pac))
+            client.close()
         else:
             print('a')
             client.close()

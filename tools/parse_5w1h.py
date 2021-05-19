@@ -109,9 +109,11 @@ class parse_5w1h(object):
 
             l[-1] = end-1
             if end < len(doc):
-                if (re.search("ので|だから",doc[l[-1]-2:l[-1]].text) or re.search("ので、|だから、",doc[l[-1]-3:l[-1]].text) or re.search("ため",doc[l[-1]-1:l[-1]].text) or re.search("ため、",doc[l[-1]-2:l[-1]-1].text)) and doc[l[-1]].pos_ != "ADP":
-                    tag = "Why" 
-
+                try: 
+                    if (re.search("ので|だから",doc[l[-1]-2:l[-1]].text) or re.search("ので、|だから、",doc[l[-1]-3:l[-1]].text) or re.search("ため",doc[l[-1]-1:l[-1]].text) or re.search("ため、",doc[l[-1]-2:l[-1]-1].text)) and doc[l[-1]].pos_ != "ADP":
+                        tag = "Why" 
+                except IndexError:
+                    print(" Span index out of range.")
             for t in doc[l[1]:end]:
                 if t._._5w1h == 'None' or t._._5w1h == "Mod" or tag == "Why":
                     t._._5w1h = tag
@@ -142,10 +144,12 @@ class parse_5w1h(object):
             l[-1] = end
 
             if end < len(doc):
-                if (re.search("ので|だから",doc[l[-1]-2:l[-1]].text) or re.search("ので、|だから、",doc[l[-1]-3:l[-1]].text) 
+                try: 
+                    if (re.search("ので|だから",doc[l[-1]-2:l[-1]].text) or re.search("ので、|だから、",doc[l[-1]-3:l[-1]].text) 
                     or re.search("ため",doc[l[-1]-1:l[-1]].text) or re.search("ため、",doc[l[-1]-2:l[-1]].text)) and doc[l[-1]].pos_ != "ADP":
-                    tag = "Why" 
-
+                        tag = "Why" 
+                except IndexError:
+                    print(" Span index out of range.")
             for t in doc[l[1]:l[2]]:
                 if t._._5w1h == 'None' or t._._5w1h == "Mod" or tag == "Why" :
                     t._._5w1h = tag
@@ -158,15 +162,15 @@ class parse_5w1h(object):
                     t._._type = nlp.vocab.strings[l[0]]
 
         #matcherを追加
-        #matcher.add("When",add_right, When_pattern1,When_pattern2,When_pattern3,When_pattern4)
-        #matcher.add("Where", add_right, Where_pattern1,Where_pattern2,Where_pattern3)
-        #matcher.add("How", add_right, How_pattern1,How_pattern2,How_pattern3,How_pattern4,How_pattern5,
-                   # How_pattern6,How_pattern7,How_pattern8,How_pattern9,How_pattern10,How_pattern11,How_pattern12,How_pattern13,How_pattern14,How_pattern15)
-        #matcher.add("Who",add_label, Who_pattern1,Who_pattern2,Who_pattern3,Who_pattern4,Who_pattern5,
-                  #  Who_pattern6,Who_pattern7,Who_pattern8,Who_pattern9)
-        #matcher.add("What", add_right, What_pattern1,What_pattern2)
-        #matcher.add("Why", add_label,Why_pattern1)
-        #matcher.add("Mod", add_right_left,Mod_pattern1,Mod_pattern2)
+        matcher.add("When",add_right, When_pattern1,When_pattern2,When_pattern3,When_pattern4)
+        matcher.add("Where", add_right, Where_pattern1,Where_pattern2,Where_pattern3)
+        matcher.add("How", add_right, How_pattern1,How_pattern2,How_pattern3,How_pattern4,How_pattern5,
+                    How_pattern6,How_pattern7,How_pattern8,How_pattern9,How_pattern10,How_pattern11,How_pattern12,How_pattern13,How_pattern14,How_pattern15)
+        matcher.add("Who",add_label, Who_pattern1,Who_pattern2,Who_pattern3,Who_pattern4,Who_pattern5,
+                    Who_pattern6,Who_pattern7,Who_pattern8,Who_pattern9)
+        matcher.add("What", add_right, What_pattern1,What_pattern2)
+        matcher.add("Why", add_label,Why_pattern1)
+        matcher.add("Mod", add_right_left,Mod_pattern1,Mod_pattern2)
         
         matcher.add("Task", add_label_type,Task_pattern1,Task_pattern2,Task_pattern3,Task_pattern4)
 
@@ -197,11 +201,12 @@ class parse_5w1h(object):
 
                         end = end + 1
 
-
-                    #if (re.search("ので|だから",doc[end-2:end-1].text) or re.search("ので、|だから、",doc[end-3:end-1].text)
-                     #   or re.search("ため",doc[end-1:end-1].text) or re.search("ため、",doc[end-2:end-1].text)) and doc[end-1].pos_ != "ADP":
-                      #  tag2 = "Why"
-
+                    try: 
+                        if (re.search("ので|だから",doc[end-2:end-1].text) or re.search("ので、|だから、",doc[end-3:end-1].text)
+                            or re.search("ため",doc[end-1:end-1].text) or re.search("ため、",doc[end-2:end-1].text)) and doc[end-1].pos_ != "ADP":
+                            tag2 = "Why"
+                    except IndexError:
+                        print(" Span index out of range.")
 
                     for t in doc[start:end]:
                         if not t._._5w1h or t._._5w1h == "Mod" or tag2 == "Why":

@@ -10,11 +10,17 @@ def speech_text(wav_path):
     fs = 16000
 
     r = sr.Recognizer()
-
+    type_ = ''
     with sr.AudioFile(wav_path) as source:
         audio = r.record(source)
     try:
         text = r.recognize_google(audio, language='ja-JP')
+        parse = parse_5w1h(0)
+        parse.extract(text)
+        if parse.display_type():
+            type_ = parse.display_type()
+
+
     except sr.UnknownValueError:
         # 何を言っているのかわからなかった場合の処理
         print("例外発生", "could not understand audio")
@@ -23,18 +29,14 @@ def speech_text(wav_path):
         # レスポンスが返ってこなかった場合の処理
         print("例外発生", "Could not request results from Google Speech Recognition service; {0}".format(e))
         text = ''
-    #parse = parse_5w1h(0)
-    #parse.extract(text)
-    #if parse.display_type():
-     #   type_ = parse.display_type()
 
-    #text,type_ = transcribe_file(output_path,fs)
+
     print(text)
-    #print(type_)
+    print(type_)
     #text_dict['あ']="",sorted(wav_file)[i]
 
         
-    return text
+    return text,type_
 
 if __name__ == "__main__":
     
