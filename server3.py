@@ -19,14 +19,14 @@ PLAY = 3
 INPUT = 4
 CON = 5
 GIJI = 6
-MSGLEN = 4096
+MSGLEN = 8192
 CHUNK = 176400
 
 class StreamServer():
 	def __init__(self, server_host, server_port):
 		self.SERVER_HOST = server_host
 		self.SERVER_PORT = int(server_port)
-		self.CHUNK = 4048
+		self.CHUNK = 4410
 		self.FORMAT = 8 # 16bit
 		self.CHANNELS = 1             # monaural
 		self.fs = 16000
@@ -117,18 +117,35 @@ class StreamServer():
 			# サンプリング周波数。普通のCDなら44.1k
 			framerate = waveFile.getframerate()
 
-			# 音声のデータ点の数
+			# 音声のデータ点の数ノットイコールデータ数
 			nframes = waveFile.getnframes()
-			print(nframes)
-			data = waveFile.readframes(min(nframes,CHUNK))
+			data = waveFile.readframes(-1)
+			sig_len = len(data)
 			waveFile.close()
 			pac = framerate.to_bytes(4,'big')
 			pac += samplewidth.to_bytes(2,'big')
 			pac += nchanneles.to_bytes(2,'big')
-			pac += nframes.to_bytes(MSGLEN-8,'big')
-			client.sendall(pac)
-			client.recv(MSGLEN)
+			pac += sig_len.to_bytes(MSGLEN-8,'big')
+			#再生ファイル情報の送信
+			send_pac(client,PLAY,pac)
+			off_set = 0
 
+			if min(nframes,off_set+CHUNK) == sig_len:
+				send_pac(client,1,data[off_set:sig_len])
+				off_set = sig_len
+			else:
+				send_pac(client,0,data[off_set:off_set+CHUNK])
+				off_set += CHUNK
+			while off_set < sig_len:
+						
+				r_cmd, MSG = recieve_pac(client)
+				if min(sig_len,off_set+CHUNK/2) == sig_len:
+					send_pac(client,1,data[off_set:sig_len])
+					off_set = sig_len
+				else:
+					idx = int(off_set+CHUNK/2)
+					send_pac(client,0,data[off_set:idx])
+					off_set += int(CHUNK/2)
 			client.close()
 
 
@@ -157,7 +174,7 @@ class StreamServer():
 
 		#wavfile受け取りの処理    
 		elif r_cmd == INPUT:
-			wav_id = str(time.time())[-4:]
+			wav_id = int(str(time.time())[-4:])
 			framerate = int.from_bytes(MSG[0:4], 'big')
 			samplewidth = int.from_bytes(MSG[4:6], 'big')
 			nchanneles = int.from_bytes(MSG[6:8],'big')
@@ -197,7 +214,7 @@ class StreamServer():
 							      
 						#設定秒間以上だったら保存
 						if length  > 2:
-							Id = wav_id+str(file_id)
+							Id = str(wav_id)+str(file_id)
 							print(Id)
 							file_path = self.cla_dir[client.getpeername()[0]] +Id+ ".wav"
 
@@ -264,7 +281,6 @@ class StreamServer():
 			client.close()
 def recieve_pac(client):
 
-	MSGLEN = 8192
 	cicle_t = 0
 	data_len = 0
 	offset = 0
@@ -296,10 +312,10 @@ def send_pac(client,type_ID,q):
 	packet = bytearray(MSGLEN)
 	packet[0:2] = type_ID.to_bytes(2,'big')
 	packet[2:] = len(q).to_bytes(MSGLEN-2,'big')
-	client.send(packet)
+	client.sendall(packet)
 
 	while offset < len(q):
-		packet[:] = q[offset:offset+MSGLEN]
+		packet = q[offset:min(offset+MSGLEN,len(q))]
 		send_len = client.send(packet)
 		offset += send_len
 	print('sended')
