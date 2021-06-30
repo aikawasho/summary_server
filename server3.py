@@ -20,7 +20,7 @@ INPUT = 4
 CON = 5
 GIJI = 6
 MSGLEN = 8192
-CHUNK = 176400
+BAFFA = 176400
 
 class StreamServer():
 	def __init__(self, server_host, server_port):
@@ -130,22 +130,23 @@ class StreamServer():
 			send_pac(client,PLAY,pac)
 			off_set = 0
 
-			if min(nframes,off_set+CHUNK) == sig_len:
+			if min(nframes,off_set+BAFFA) == sig_len:
 				send_pac(client,1,data[off_set:sig_len])
 				off_set = sig_len
 			else:
-				send_pac(client,0,data[off_set:off_set+CHUNK])
-				off_set += CHUNK
+				send_pac(client,0,data[off_set:off_set+BAFFA])
+				off_set += BAFFA
 			while off_set < sig_len:
 						
 				r_cmd, MSG = recieve_pac(client)
-				if min(sig_len,off_set+CHUNK/2) == sig_len:
+				print('off_set',off_set)
+				if min(sig_len,off_set+BAFFA/2) == sig_len:
 					send_pac(client,1,data[off_set:sig_len])
 					off_set = sig_len
 				else:
-					idx = int(off_set+CHUNK/2)
+					idx = int(off_set+BAFFA/2)
 					send_pac(client,0,data[off_set:idx])
-					off_set += int(CHUNK/2)
+					off_set += int(BAFFA/2)
 			client.close()
 
 
@@ -306,8 +307,6 @@ def recieve_pac(client):
 	return r_cmd, MSG
 def send_pac(client,type_ID,q):
 	print('connect to' , add, 'port:' ,port)
-	print(len(q))
-	    
 	offset = 0
 	packet = bytearray(MSGLEN)
 	packet[0:2] = type_ID.to_bytes(2,'big')
