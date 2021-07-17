@@ -20,7 +20,7 @@ INPUT = 4
 CON = 5
 GIJI = 6
 MSGLEN = 8192
-BAFFA = 176400
+BAFFA = 19200
 
 class StreamServer():
 	def __init__(self, server_host, server_port):
@@ -120,33 +120,42 @@ class StreamServer():
 			# 音声のデータ点の数ノットイコールデータ数
 			nframes = waveFile.getnframes()
 			data = waveFile.readframes(-1)
-			sig_len = len(data)
+			data = bytearray(data)
+			if samplewidth == 2:
+				sig_array = np.frombuffer(data,dtype='int16')
+			else:
+				sig_array = np.frombuffer(data,dtype='int24')
 			waveFile.close()
 			pac = framerate.to_bytes(4,'big')
 			pac += samplewidth.to_bytes(2,'big')
 			pac += nchanneles.to_bytes(2,'big')
-			pac += sig_len.to_bytes(MSGLEN-8,'big')
+			pac += nframes.to_bytes(MSGLEN-8,'big')
 			#再生ファイル情報の送信
 			send_pac(client,PLAY,pac)
 			off_set = 0
 
-			if min(nframes,off_set+BAFFA) == sig_len:
-				send_pac(client,1,data[off_set:sig_len])
+			if nframes <= off_set+BAFFA:
+				send_pac(client,1,sig_array[off_set:nframes].tobytes())
 				off_set = sig_len
 			else:
-				send_pac(client,0,data[off_set:off_set+BAFFA])
+				send_pac(client,0,sig_array[off_set:off_set+BAFFA].tobytes())
 				off_set += BAFFA
-			while off_set < sig_len:
+			while off_set <= nframes:
 						
 				r_cmd, MSG = recieve_pac(client)
-				print('off_set',off_set)
-				if min(sig_len,off_set+BAFFA/2) == sig_len:
-					send_pac(client,1,data[off_set:sig_len])
-					off_set = sig_len
+				off_set = int.from_bytes(MSG[:],'big')
+				if r_cmd == 0:
+					off_set += int(BAFFA/2)
+
+				if nframes < off_set+BAFFA/2:
+					send_pac(client,1,sig_array[off_set:nframes].tobytes())
+				elif r_cmd == 1:
+					print('SEEK OFF SET',off_set)
+					idx = min([nframes,off_set+BAFFA])
+					send_pac(client,0,sig_array[off_set:idx].tobytes())
 				else:
 					idx = int(off_set+BAFFA/2)
-					send_pac(client,0,data[off_set:idx])
-					off_set += int(BAFFA/2)
+					send_pac(client,0,sig_array[off_set:idx].tobytes())
 			client.close()
 
 
@@ -283,13 +292,13 @@ class StreamServer():
 def recieve_pac(client):
 
 	cicle_t = 0
-	data_len = 0
+	data_len_len = 0
 	offset = 0
 	data_info = bytes()
-	while data_len < MSGLEN:
+	while data_len_len < MSGLEN:
 		tmp = client.recv(MSGLEN)
 		data_info += tmp
-		data_len = len(data_info)
+		data_len_len = len(data_info)
 	r_cmd = int.from_bytes(data_info[0:2], 'big')
 	data_len = int.from_bytes(data_info[2:MSGLEN],'big')
 	print(r_cmd)
@@ -345,3 +354,4 @@ if __name__ == '__main__':
 	add="127.0.0.1"
 	mss_server = StreamServer(add, port)
 	mss_server.run()
+
