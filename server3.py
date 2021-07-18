@@ -20,7 +20,7 @@ INPUT = 4
 CON = 5
 GIJI = 6
 MSGLEN = 8192
-BAFFA = 19200
+BAFFER = 40960*2
 
 class StreamServer():
 	def __init__(self, server_host, server_port):
@@ -133,28 +133,32 @@ class StreamServer():
 			#再生ファイル情報の送信
 			send_pac(client,PLAY,pac)
 			off_set = 0
-
-			if nframes <= off_set+BAFFA:
+			#最初のチャンク送信
+			if nframes <= off_set+BAFFER/samplewidth:
 				send_pac(client,1,sig_array[off_set:nframes].tobytes())
-				off_set = sig_len
+				off_set = nframes
 			else:
-				send_pac(client,0,sig_array[off_set:off_set+BAFFA].tobytes())
-				off_set += BAFFA
+				send_pac(client,0,sig_array[off_set:off_set+BAFFER].tobytes())
+				off_set += int(BAFFER/samplewidth)
 			while off_set <= nframes:
 						
 				r_cmd, MSG = recieve_pac(client)
 				off_set = int.from_bytes(MSG[:],'big')
 				if r_cmd == 0:
-					off_set += int(BAFFA/2)
+					off_set += int(BAFFER/2/samplewidth)
 
-				if nframes < off_set+BAFFA/2:
+				if nframes < off_set+BAFFER/2/samplewidth:
 					send_pac(client,1,sig_array[off_set:nframes].tobytes())
 				elif r_cmd == 1:
 					print('SEEK OFF SET',off_set)
-					idx = min([nframes,off_set+BAFFA])
-					send_pac(client,0,sig_array[off_set:idx].tobytes())
+					header = 0
+					#header=0: 終了
+					if nframes <= off_set+BAFFER/samplewidth:
+						header = 1
+					idx = min([nframes,off_set+int(BAFFER/samplewidth)])
+					send_pac(client,header,sig_array[off_set:idx].tobytes())
 				else:
-					idx = int(off_set+BAFFA/2)
+					idx = int(off_set+BAFFER/2/samplewidth)
 					send_pac(client,0,sig_array[off_set:idx].tobytes())
 			client.close()
 
@@ -168,11 +172,11 @@ class StreamServer():
 				suma = Bertsum_pred(text)
 			print('summary complete')
 			suma = '\n'.join(suma)
-			data = suma.encode()
-			pac = int(len(data)+4).to_bytes(4,'big')
-			pac += data
-			print(len(data))
-			client.sendall(pac)
+			pac = suma.encode()
+			#pac = int(len(data)+4).to_bytes(4,'big')
+			#pac += data
+			#print(len(data))
+			send_pac(client,0,pac)
 			print('sended!')
 			client.close()
 
