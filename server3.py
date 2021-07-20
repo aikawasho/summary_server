@@ -94,7 +94,7 @@ class StreamServer():
 			text_b = text.encode()
 			text_length = len(text_b)
 
-			pac += text_length.to_bytes(2,'big')
+			pac += text_length.to_bytes(5,'big')
 			pac += text_b
 			client.sendall(pac)
 			print('sending text complete')
@@ -283,7 +283,7 @@ class StreamServer():
 			if t_len != 0:
 				tasks = MSG[4+t_len+4+s_len+4:].decode()
 
-			gijiroku = { "texts":texts,"summasy":summay,"tasks":tasks}
+			gijiroku = { "texts":texts,"summary":summay,"tasks":tasks}
 
 			file_name ='./gijiroku/'+ str(int(time.time()))+'.json'
 			with open(file_name,'w') as f:
